@@ -1,14 +1,23 @@
 // ==== 1. The Absolute Basics: Starting the Server, Getting Help, Running Code ==== //
 
+// one line comment
+/*
+Multi line comment
+*/
+
 // List your devices
-ServerOptions.devices;
+ServerOptions.devices();
 ServerOptions.devices.do({|dev,idx| postln("%:%".format(idx,dev)) }); // print them out one line at a time with index numbers
 
 // Set an audio device to use
-Server.default.options.device = ServerOptions.devices[15];
+Server.default.options.device = ServerOptions.devices[12];
+
+Server.default;
+
+Server.killAll();
 
 // Start the Synthesis Server
-Server.default.boot;
+Server.default.boot();
 
 // Make some sound
 { SinOsc.ar() * 0.1 }.play;
@@ -29,6 +38,20 @@ CTRL+b         >> start the default synthesis server
 
 // Make some sound (i.e. make a synth and play it) ... this time assign the playing synth to a variable x
 x = { SinOsc.ar(300) * 0.2 }.play;
+
+postln("Hello");
+"Hello".postln;
+
+String
+
+"Hello".class;
+120.class;
+1.2.class;
+{ }.class;
+
+x = {
+	(SinOsc.ar(300) + SinOsc.ar(800) + SinOsc.ar(1600)) * 0.05
+}.play;
 
 // Stop the synth from playing and free its memory
 x.free;
@@ -77,15 +100,65 @@ y.free;
 // You define a function using the format
 {|argument1, argument2| /* your function code goes here */ }
 
+
+def myfunc(arg1, arg2, arg3):
+   postln(arg1)
+
+{|arg1,arg2,arg3|
+	postln(arg1);
+}
+
+// The most basic function you can imagine.
+{ postln("Hello World") }.value();
+
+f = { postln("Hello World") };
+f.value();
+
+// FUNCTIONS ARE VARIABLES!! -> the official way of saying this in CS "Functions are First Class Citizens"
+
+
+
 // The most simple example of a function with no arguments... store it in the variable f to make using it easier.
 // Then call the 'value' method to evaluate it. Note that strings in supercollider are written with "Double Quotes"
 f = { postln("██████████ Hello World ██████████") };
 f.value;
 
+f = {|arg1, arg2|
+	postln(arg1);
+	postln(arg2);
+};
+
+// For default arguments, do this...
+f = {|arg1="default1", arg2="default2"|
+	postln(arg1);
+	postln(arg2);
+};
+
+
+f.value();
+f.value("Hello");
+f.value("Hello", "World");
+
+a = nil; // nil is SuperCollider's "nothing value"
+
 // A more complex function that takes a string and an integer and prints the string that many times.
-f = {|printme, thismanytimes| thismanytimes.do({ postln(printme) }) };
+f = {|printme="default", thismanytimes=5|
+	thismanytimes.do( { postln(printme) } );
+};
+
+f.value();
+
 f.value("SuPeRcOlLiDeR", 10);
+
 // do() is basically a for loop ... and you give it a function to do X times.
+
+3.do( {|i| postln(i) } );
+
+// The same as a for loop with i going from 0->2
+do(3, {|i|
+	postln(i)
+});
+
 // See how the function is treated as if it was any other kind of value?
 
 // You can also give function arguments default values..
@@ -93,16 +166,21 @@ f.value(); // this prints 'nil' (SuperCollider's value for "nothing")
 f = {|printme="Default", thismanytimes=3| thismanytimes.do({ postln(printme) }) }; // redefine with default values
 f.value(); // Now your default values kick in when you don't specify any
 
-// Functions that have sound signal generators in them (aka. UGENS) are special.
+
+// Functions that have sound signal generators in them (aka. UGens) are special.
 // They can be sent to the server, which uses them to construct a synth
 u = { RLPF.ar(Saw.ar([261,587]) * Saw.ar(8), LFTri.ar(3.7).range(40, 2200), 0.3) }; // a function with UGENS
 x = u.play(); // play sends it to the server and tells the server to play it as soon as it can
+
 x.run(false); // pause the synth, but don't free its memory from the server
 x.run(true); // resume playing
+
 x.free;
 
 // Arguments in synth functions become parameters you can use to control synths in realtime.
-u = {|f1=261,f2=587,lfo1=8,lfo2=3.7,rq=0.3| RLPF.ar(Saw.ar([f1,f2]) * Saw.ar(lfo1), LFTri.ar(lfo2).range(40, 2200), rq) };
+u = {|f1=261,f2=587,lfo1=8,lfo2=3.7,rq=0.3|
+	RLPF.ar(Saw.ar([f1,f2]) * Saw.ar(lfo1), LFTri.ar(lfo2).range(40, 2200), rq)
+};
 x = u.play();
 
 // Change parameter values on the fly with the set method. Parameters are set using name,value pairs.
@@ -114,6 +192,19 @@ x.set(\rq, 0.05);
 // You can also set multiple parameters at once...
 x.set(\f1, 774, \f2, 460, \lfo1, 4.6, \lfo2, 3.4, \rq, 0.1);
 x.free;
+
+// You refer to argument names by writing them as symbols:
+Symbol
+\myname
+'myname'
+
+Server
+
+
+y = {|f1=261,f2=587,lfo1=8,lfo2=3.7,rq=0.3|
+	RLPF.ar(LFTri.ar([f1,f2]) * Pulse.ar(lfo1), SinOsc.ar(lfo2).range(40, 2200), rq)
+};
+l = y.play();
 
 
 
