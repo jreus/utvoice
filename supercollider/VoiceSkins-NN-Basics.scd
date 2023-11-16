@@ -8,20 +8,21 @@ Dialog.openPanel({|path| ~path_to_model=path });
 
 postln(~path_to_model);
 
+// Windows: List devices & set the preferred device by number
 ServerOptions.devices.do({|dev,idx| postln("%:%".format(idx,dev)) });
+s.options.device = ServerOptions.devices[15];
 
 (
-s.options.device = ServerOptions.devices[15];
 s.options.memSize = 2**16;
-s.options.hardwareBufferSize = 2048;
-//s.options.blockSize = 512;
-s.options.blockSize = 2048;
+//s.options.hardwareBufferSize = 2048;
+s.options.hardwareBufferSize = 512;
+s.options.blockSize = 512;
+//s.options.blockSize = 2048;
 s.boot;
 );
 
 NN.load(\musilon, ~path_to_model);
 //NN.load(\vctk, ~path_to_model);
-NN(\musilon).warmup; // not 100% necessary
 NN.describeAll; // print info on all loaded models
 
 
@@ -77,4 +78,42 @@ x = {|f1=261,f2=587,lfo1=8,lfo2=3.7,rq=0.3| RLPF.ar(Saw.ar([f1,f2]) * Saw.ar(lfo
 
 x.free; // don't forget to free your synth when you're done with it
 
+
+
+
+//===== Controlling a NN model using the incoming ESP32 Data ========
+// Make sure none of the synths you created above are still active... CMD-. if needed!
+
+if(y.notNil) { y.free }; // if y exists, free it before creating a new synth
+(
+y={|pan=0.0, gain=1.0|
+	var input, output, z;
+	var biases, scales;
+	biases = 4.do {};
+	scales = 4.do {};
+	input = Saw.ar([\f0.kr(200),\f1.kr(300)] * Scale.major.ratios[..3]).sum * LFTri.ar(\lfo.kr(0.1));
+	input = input.softclip;
+	//z = NN(\musilon, \encode).ar(inputs: input);
+	//z = (z * 1.0) + 0.0; // bias & scaling
+	//output = NN(\musilon, \decode).ar(inputs: z);
+	output=input;
+	Pan2.ar(output, pan, gain);
+}.play();
+);
+
+y.set(\f0, 100, \saw, 0.5, \noise, 0.1); // change some parameters
+
+( // Map incoming OSC data to sound parameters
+OSCdef(\esp32, {|msg|
+	var f0, f1, lfo;
+	lfo = msg[3].asInteger.linexp(10, 100, 10, 0.1);
+	f1 = msg[2].asInteger.linexp(0, 4095, 50, 3000);
+	f0 = msg[1].asInteger.linexp(0, 4095, 100, 2000);
+
+	[f0, f1, lfo].postln;
+
+	y.set(\f0, f0, \f1, f1, \lfo, lfo, \gain, 1.0); // change some parameters
+}, "/esp32");
+
+);
 

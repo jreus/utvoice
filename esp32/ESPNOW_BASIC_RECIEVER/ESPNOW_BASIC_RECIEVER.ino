@@ -28,7 +28,7 @@
 #include <WiFi.h>
 
 #define CHANNEL 1
-#define BAUD 230400
+#define BAUD 115200
 
 #define PLOT_SERIAL false
 

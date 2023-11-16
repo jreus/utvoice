@@ -19,11 +19,6 @@ import time
 import re
 import glob
 
-#SERIALPORT='COM4' # Windows looks like this
-SERIALPORT='/dev/ttyUSB1' # Ubuntu Linux
-#SERIALBAUD=115200
-SERIALBAUD=230400
-
 def serial_ports():
     """ Lists serial port names
 
@@ -52,51 +47,16 @@ def serial_ports():
             pass
     return result
 
-
-
-
-class DataPackage:
-    """
-    Data Package
-    Needs to be defined specifically to match the type of data coming in from the reciever.
-    """
-    params = list()
-    timestamp = None
-
-    def __init__(self, ts, *params):
-        if ts is None:
-            self.timestamp = time.time()
-        else:
-            self.timestamp = ts
-        for idx,param in enumerate(params):
-            if idx == 0:
-                # Add any special parameter specific processing here, otherwise assumes unsigned 12-bit integers
-                pass 
-            self.params.append(param)
-
-
-###########################################################################
-################# Serial Read Functions
-###########################################################################
-def read_int(buffer, start):
-    strval=""
-    idx = start
-    while (idx < len(buffer)) and (buffer[idx] not in "abcdefghijklmnop"): 
-        strval += buffer[idx]
-        idx += 1
-    return int(strval),idx
+pattern = re.compile('[a-z]:', re.IGNORECASE)
 
 def write_read(x, hardware):
     """
-    Write parameter x to the serial buffer.
-    Then read whatever is coming from the reciever.
-
-    Returns the recieved data package
-    
+    Write parameter x to the serial buffer (not implemented)
+    Read whatever is coming from the reciever.
+    Returns the recieved data package as a dict of param_id->value pairs    
     """
     #hardware.write(bytes(x, 'utf-8'))
-    pattern = re.compile('[a-z]:', re.IGNORECASE)
-    time.sleep(0.05)
+    time.sleep(0.005)
     recieved_data = hardware.readline()
     if recieved_data:
         print(f"RCV: {recieved_data}")
@@ -133,32 +93,48 @@ def write_read(x, hardware):
 
 
 if __name__=="__main__":
-    
+    import argparse
     from pythonosc import osc_message_builder
     from pythonosc import udp_client
 
-    OSC_DESTINATION_IP = 'localhost'
-    OSC_DESTINATION_PORT = 57120 # default local port for sclang
-    
-    osc_client = udp_client.SimpleUDPClient(OSC_DESTINATION_IP, OSC_DESTINATION_PORT)
+    parser = argparse.ArgumentParser(description='Utility to convert incoming serial data from an ESP32 reciever to OSC.')
 
-    print("List Serial Ports")
-    print(serial_ports())
-    
-    hardware = serial.Serial(port=SERIALPORT, baudrate=SERIALBAUD, timeout=.1)
+    parser.add_argument('--list_serial', action='store_true', default=False, help='List all available serial ports.')
 
-    while True:
-        datablock=write_read(0, hardware)
 
-        if datablock is not None:
-            builder = osc_message_builder.OscMessageBuilder(address="/esp32")
-            
-            for param_id, value in datablock.items():
-                builder.add_arg(value)
+    parser.add_argument('--serial_port', type=str, help='Choose serial port the ESP32 reciever is connected to, by default uses the first port found with --list_serial')
+    parser.add_argument('--serial_baud', type=int, default=115200, help='Choose serial port baud rate.')
+    parser.add_argument('--osc_dest', type=str, default='localhost:57120', help='Destination address and port to send OSC data to. By default sends to localhost:57120')
+    parser.add_argument('--osc_address', type=str, default='/esp32', help='The OSC address that will be recieved by the destination software.')
+        
+    args = parser.parse_args()
 
-            msg = builder.build()
+    if args.list_serial:
+        print("Available Serial Ports")
+        print(serial_ports())
+    else:
+        OSC_DESTINATION_IP, OSC_DESTINATION_PORT = args.osc_dest.split(':')
+        OSC_DESTINATION_PORT = int(OSC_DESTINATION_PORT)
+        SERIAL_PORT = args.serial_port
+        SERIAL_BAUD = args.serial_baud
+        if SERIAL_PORT is None:
+            ports = serial_ports()
+            if not ports:
+                raise ConnectionError("No Serial Ports can be Found")
+            SERIAL_PORT = ports[0]
 
-            #Send out to OSC client
-            osc_client.send(msg)
-            
-            print(f"{datablock}")
+        # Create OSC client & connect to Serial port
+        osc_client = udp_client.SimpleUDPClient(OSC_DESTINATION_IP, OSC_DESTINATION_PORT)        
+        hardware = serial.Serial(port=SERIAL_PORT, baudrate=SERIAL_BAUD, timeout=.1)
+
+        while True:
+            datablock=write_read(0, hardware)
+
+            if datablock is not None:
+                builder = osc_message_builder.OscMessageBuilder(address="/esp32")
+                for param_id, value in datablock.items():
+                    builder.add_arg(value)
+                msg = builder.build()
+                #Send out to OSC client
+                osc_client.send(msg)
+                print(f"{datablock}") # give some feedback
