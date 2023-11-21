@@ -24,8 +24,21 @@
          Any devices can act as either one or both simultaneously.
 */
 
+
+// Uncomment the define statement here that matches the ESP chip you're programming.
+//#define USING_ESP32
+//#define USING_ESP8266
+
+#ifdef ESP32
 #include <esp_now.h>
 #include <WiFi.h>
+#endif
+
+#ifdef ESP8266
+#include <ESP8266WiFi.h>
+#include <espnow.h>
+#endif
+
 
 #define CHANNEL 1
 #define BAUD 115200
@@ -47,20 +60,30 @@ data_package myData;
 // Init ESP Now with fallback
 void InitESPNow() {
   WiFi.disconnect();
+
+#ifdef ESP32
   if (esp_now_init() == ESP_OK) {
-
     Serial.println("ESPNow Init Success");
-
   }
   else {
 
     Serial.println("ESPNow Init Failed");
-
     // Retry InitESPNow, add a counte and then restart?
     // InitESPNow();
     // or Simply Restart
     ESP.restart();
   }
+#endif
+
+#ifdef ESP8266
+  // Init ESP-NOW
+  if (esp_now_init() != 0) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+#endif
+
+
 }
 
 // config AP SSID
@@ -76,9 +99,28 @@ void configDeviceAP() {
   }
 }
 
+
 // callback when data is recv from Sender
-void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int data_len) {
-  char macStr[18];
+
+// #ifdef USING_ESP32
+// void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int data_len) {
+//   OnDataRecvCommon((uint8_t *)mac_addr, (uint8_t *)incomingData, (uint8_t) data_len);
+// }
+// #endif
+
+// #ifdef USING_ESP8266
+// void OnDataRecv(uint8_t *mac_addr, uint8_t *incomingData, uint8_t data_len) {
+//   OnDataRecvCommon(mac_addr, incomingData, data_len);
+// }
+// #endif
+
+#ifdef ESP8266
+void OnDataRecvCommon(uint8_t *mac_addr, uint8_t *incomingData, uint8_t data_len) {
+#endif
+#ifdef ESP32
+void OnDataRecv(const esp_now_recv_info *mac_addr, const uint8_t *incomingData, int data_len) {
+#endif
+ char macStr[18];
   memcpy(&myData, incomingData, sizeof(myData));
   
   #if (PLOT_SERIAL == true)
@@ -112,7 +154,17 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int data_l
 void setup() {
 
   Serial.begin(BAUD);
+  delay(10);
+  Serial.println();
   Serial.println("ESPNow Reciever");
+
+  #ifdef ESP32
+  Serial.println("USING ESP32 CHIP");
+  #endif
+
+  #ifdef ESP8266
+  Serial.println("USING ESP8266 CHIP");
+  #endif
 
   // Set device as a Wifi Station, so both Sender and Reciever operate as two Wifi Stations
   // and connect directly by Mac address?

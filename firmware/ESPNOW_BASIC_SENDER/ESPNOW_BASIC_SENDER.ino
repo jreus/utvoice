@@ -24,10 +24,15 @@
          Any devices can act as either one or both simultaneously.
 */
 
-
+#ifdef ESP32
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h> // only for esp_wifi_set_channel()
+#endif
+
+#ifdef ESP8266
+// TODO: Build an ESP8266 compatible version of this firmware.
+#endif
 
 // Data package, must match data package in Reciever firmware
 // ESPNow spec limits this to around 250 bytes
@@ -255,7 +260,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
     Serial.print("Last Packet Sent to: "); 
     Serial.println(macStr);
-    Serial.print("Last Packet Send Status: "); 
+    Serial.print("Last Packet Send Status: ");
     Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
   }
 }
