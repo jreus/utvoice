@@ -47,41 +47,28 @@ def serial_ports():
             pass
     return result
 
-pattern = re.compile('[a-z]:', re.IGNORECASE)
+serial_pattern = re.compile('[a-z0-9]+:[0-9]+', re.IGNORECASE)
 
-def write_read(x, hardware):
+def read_serial(hardware):
     """
-    Write parameter x to the serial buffer (not implemented)
     Read whatever is coming from the reciever.
+    hardware    the serial port to read from
     Returns the recieved data package as a dict of param_id->value pairs    
     """
     #hardware.write(bytes(x, 'utf-8'))
-    time.sleep(0.005)
     recieved_data = hardware.readline()
     if recieved_data:
         print(f"RCV: {recieved_data}")
         recieved_data = recieved_data.decode('ascii') # decode from byte string 
 
-        # Assuming data is coming in the format "a:12837" where a is the param id and 12837 is the value
-        # if pattern.match(recieved_data[:2]):
-        #     param_id = recieved_data[0]
-        #     # Depending on id, do special parsing...
-        #     # if param_id is 'a': # for example...
-        #     #     value = float(recieved_data[2:])
-            
-        #     value = int(recieved_data[2:])
-        #     return param_id, value
-
-
-        # Assuming data is coming in the format "a:12837,b:123,c:8762"
-        if pattern.match(recieved_data[:2]):
+        # Assuming data is coming in the format "ad:12837,bc:123,c2:8762"
+        if serial_pattern.match(recieved_data):
             res = dict()
             vals = recieved_data.split(',')
             try:
                 for val in vals:
-                    param_id = val[0]
-                    value = int(val[2:])
-                    res[param_id] = value
+                    param_id, value = val.split(':')
+                    res[param_id] = int(value)
                 return res            
             except ValueError as e:
                 print(f"!!! {recieved_data}")
@@ -103,9 +90,9 @@ if __name__=="__main__":
 
 
     parser.add_argument('--serial_port', type=str, help='Choose serial port the ESP32 reciever is connected to, by default uses the first port found with --list_serial')
-    parser.add_argument('--serial_baud', type=int, default=115200, help='Choose serial port baud rate.')
+    parser.add_argument('--serial_baud', type=int, default=115200, help='Choose serial port baud rate. Uses 115200 by default.')
     parser.add_argument('--osc_dest', type=str, default='localhost:57120', help='Destination address and port to send OSC data to. By default sends to localhost:57120')
-    parser.add_argument('--osc_address', type=str, default='/esp32', help='The OSC address that will be recieved by the destination software.')
+    parser.add_argument('--osc_address', type=str, default='/esp32', help='The OSC address that will be recieved by the destination software. Uses /esp32 by default.')
         
     args = parser.parse_args()
 
@@ -128,7 +115,8 @@ if __name__=="__main__":
         hardware = serial.Serial(port=SERIAL_PORT, baudrate=SERIAL_BAUD, timeout=.1)
 
         while True:
-            datablock=write_read(0, hardware)
+            time.sleep(0.005) # serial read rate...
+            datablock=read_serial(hardware)
 
             if datablock is not None:
                 builder = osc_message_builder.OscMessageBuilder(address="/esp32")

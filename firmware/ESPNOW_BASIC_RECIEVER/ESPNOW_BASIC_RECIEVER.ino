@@ -127,8 +127,8 @@ void OnDataRecv(const esp_now_recv_info *mac_addr, const uint8_t *incomingData, 
   Serial.print("nt:"); Serial.print(myData.numTouches);
   Serial.print(",ta:"); Serial.print((int)myData.touchActive);
   for(int i=0; i<myData.numTouches; i++) {
-    Serial.print(",tl"); Serial.print(i); Serial.print(":"); Serial.println(myData.touchLocations[i]);
-    Serial.print(",ts"); Serial.print(i); Serial.print(":"); Serial.println(myData.touchSizes[i]);
+    Serial.print(",tl"); Serial.print(i); Serial.print(":"); Serial.print(myData.touchLocations[i]);
+    Serial.print(",ts"); Serial.print(i); Serial.print(":"); Serial.print(myData.touchSizes[i]);
   }
   Serial.println();
 #endif
