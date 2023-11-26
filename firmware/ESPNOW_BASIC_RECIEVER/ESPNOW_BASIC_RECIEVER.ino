@@ -1,5 +1,9 @@
 /**
    ESPNOW - Basic communication - Reciever
+  Stupid simple serial communication with a host PC.
+  This sketch is meant to be paired with the serial2osc.py simple serial to OSC script
+  on the PC side.
+
 
   See: https://randomnerdtutorials.com/esp-now-esp32-arduino-ide/
 
@@ -24,10 +28,16 @@
          Any devices can act as either one or both simultaneously.
 */
 
+#define USE_TRILL // uncomment this line if transmitter is using a Trill sensor
 
-// Uncomment the define statement here that matches the ESP chip you're programming.
-//#define USING_ESP32
-//#define USING_ESP8266
+#define CHANNEL 1 // ESPNow channel
+#define BAUD 115200 // Serial to PC baud
+
+#define PLOT_SERIAL false // Format Serial for Arduino plotter
+
+// Set reciever SSID (prefix should match SENDER's SCAN_FOR_PREFIX)
+const char* reciever_SSID = "rcv_thatonelaptop"; 
+
 
 #ifdef ESP32
 #include <esp_now.h>
@@ -40,19 +50,16 @@
 #endif
 
 
-#define CHANNEL 1
-#define BAUD 115200
-
-#define PLOT_SERIAL false
-
-// Stupid simple serial communication with host PC
-
 // Data package, must match data package in Reciever firmware
 // ESPNow spec limits this to around 250 bytes
 typedef struct data_package {
-  uint16_t A2;
-  uint16_t A4;
-  uint16_t touch1;
+#ifdef USE_TRILL
+  int numTouches = 0;
+  int touchLocations[5];
+  int touchSizes[5];
+  bool touchActive = false;
+#endif
+  char msg[8];
 } data_package;
 data_package myData;
 
@@ -88,34 +95,20 @@ void InitESPNow() {
 
 // config AP SSID
 void configDeviceAP() {
-  const char *SSID = "rcv_1";
-  bool result = WiFi.softAP(SSID, "rcv_1_Password", CHANNEL, 0);
+  bool result = WiFi.softAP(reciever_SSID, "rcv_1_Password", CHANNEL, 0);
   if (!result) {
     Serial.println("AP Config failed.");
   } else {
-    Serial.println("AP Config Success. Broadcasting with AP: " + String(SSID));
+    Serial.println("AP Config Success. Broadcasting with AP: " + String(reciever_SSID));
     Serial.print("AP CHANNEL "); Serial.println(WiFi.channel());
 
   }
 }
 
 
-// callback when data is recv from Sender
-
-// #ifdef USING_ESP32
-// void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int data_len) {
-//   OnDataRecvCommon((uint8_t *)mac_addr, (uint8_t *)incomingData, (uint8_t) data_len);
-// }
-// #endif
-
-// #ifdef USING_ESP8266
-// void OnDataRecv(uint8_t *mac_addr, uint8_t *incomingData, uint8_t data_len) {
-//   OnDataRecvCommon(mac_addr, incomingData, data_len);
-// }
-// #endif
-
+// TODO: Test this on an ESP8266
 #ifdef ESP8266
-void OnDataRecvCommon(uint8_t *mac_addr, uint8_t *incomingData, uint8_t data_len) {
+void OnDataRecv(uint8_t *mac_addr, uint8_t *incomingData, uint8_t data_len) {
 #endif
 #ifdef ESP32
 void OnDataRecv(const esp_now_recv_info *mac_addr, const uint8_t *incomingData, int data_len) {
@@ -123,25 +116,29 @@ void OnDataRecv(const esp_now_recv_info *mac_addr, const uint8_t *incomingData, 
  char macStr[18];
   memcpy(&myData, incomingData, sizeof(myData));
   
-  #if (PLOT_SERIAL == true)
-  // Print verbose serial info and plot incoming data
   snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   Serial.print("Last Packet Recv from: "); 
   Serial.println(macStr);
 
-  // Package for Arduino serial plotter
-  Serial.print("a:"); Serial.print(myData.A2); // alpha datapoint code followed by value in string format
-  Serial.print(",b:"); Serial.print(myData.A4); // alpha datapoint code followed by value in string format
-  Serial.print(",c:"); Serial.println(myData.touch1); // alpha datapoint code followed by value in string format
+  // Package data for Python client
+
+#ifdef USE_TRILL
+  Serial.print("nt:"); Serial.print(myData.numTouches);
+  Serial.print(",ta:"); Serial.print((int)myData.touchActive);
+  for(int i=0; i<myData.numTouches; i++) {
+    Serial.print(",tl"); Serial.print(i); Serial.print(":"); Serial.println(myData.touchLocations[i]);
+    Serial.print(",ts"); Serial.print(i); Serial.print(":"); Serial.println(myData.touchSizes[i]);
+  }
+  Serial.println();
+#endif
+  
+  // // Package for Arduino serial plotter
+  // Serial.print("a:"); Serial.print(myData.A2); // alpha datapoint code followed by value in string format
+  // Serial.print(",b:"); Serial.print(myData.A4); // alpha datapoint code followed by value in string format
+  // Serial.print(",c:"); Serial.println(myData.touch1); // alpha datapoint code followed by value in string format
 
   Serial.print("Bytes recieved: "); Serial.println(data_len);
-  #else
-  // Package data for Python client
-  Serial.print("a:"); Serial.print(myData.A2); // alpha datapoint code followed by value in string format
-  Serial.print(",b:"); Serial.print(myData.A4); // alpha datapoint code followed by value in string format
-  Serial.print(",c:"); Serial.println(myData.touch1); // alpha datapoint code followed by value in string format
-  #endif
 
   
 }

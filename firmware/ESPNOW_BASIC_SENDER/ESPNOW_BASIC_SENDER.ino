@@ -24,6 +24,23 @@
          Any devices can act as either one or both simultaneously.
 */
 
+#define USE_TRILL // uncomment this line if using a Trill sensor
+//#define VERBOSE // Uncomment to get verbose serial output
+//#define SCAN_FOR_PREFIX // uncomment to find reciever by prefix, otherwise find by mac address
+
+
+
+#ifdef SCAN_FOR_PREFIX
+const char* reciever_prefix = "rcv_"; // Set this to your reciever SSID prefix
+#else
+// Set this to your reciever MAC address
+//uint8_t recieverAddress[] = {0x30, 0xAE, 0xA4, 0x20, 0x94, 0x29};
+uint8_t recieverAddress[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x48, 0x55}; // b
+#endif
+
+
+
+
 #ifdef ESP32
 #include <esp_now.h>
 #include <WiFi.h>
@@ -34,28 +51,38 @@
 // TODO: Build an ESP8266 compatible version of this firmware.
 #endif
 
+
+#ifdef USE_TRILL
+#include <Trill.h>
+
+Trill trillSensor;
+boolean touchActive = false;
+const Trill::Device TRILL_DEVICE = Trill::TRILL_CRAFT;
+const Trill::Mode TRILL_MODE = Trill::CENTROID;
+#endif
+
 // Data package, must match data package in Reciever firmware
 // ESPNow spec limits this to around 250 bytes
 typedef struct data_package {
-  //char str[32];
-  uint16_t A2;
-  uint16_t A4;
-  uint16_t touch1;
+#ifdef USE_TRILL
+  int numTouches = 0;
+  int touchLocations[5];
+  int touchSizes[5];
+  bool touchActive = false;
+#endif
+  char msg[8];
+  //uint16_t A2;
+  //uint16_t A4;
+  //uint16_t touch1;
   //uint8_t hall;
 } data_package;
 data_package myData;
-
-// set true to get verbose serial output
-#define VERBOSE false
-
-// Reciever hard-coded MAC address
-uint8_t recieverAddress[] = {0x30, 0xAE, 0xA4, 0x20, 0x94, 0x29};
 
 // Global copy of the reciever node
 esp_now_peer_info_t reciever;
 #define CHANNEL 1
 #define PRINTSCANRESULTS 0
-#define DELETEBEFOREPAIR 1
+#define DELETEBEFOREPAIR 0
 
 
 //timer for transmission freq
@@ -83,8 +110,8 @@ void InitESPNow() {
 }
 
 
-// Useful function to scan for any nodes in AP mode with a given ssid prefix
-// Not being used in this sketch as we connect to the reciever by a hardcoded mac address.
+#ifdef SCAN_FOR_PREFIX
+
 void ScanForReciever() {
   int16_t scanResults = WiFi.scanNetworks(false, false, false, 300, CHANNEL); // Scan only on one channel
   // reset on each scan
@@ -112,8 +139,8 @@ void ScanForReciever() {
         Serial.println("");
       }
       delay(10);
-      // Check if the current device starts with `rcv`
-      if (SSID.indexOf("rcv") == 0) {
+      // Check if the current device starts with RCV_PREFIX
+      if (SSID.indexOf(reciever_prefix) == 0) {
         // SSID of interest
         Serial.println("Found the Reciever.");
         Serial.print(i + 1); Serial.print(": "); Serial.print(SSID); Serial.print(" ["); Serial.print(BSSIDstr); Serial.print("]"); Serial.print(" ("); Serial.print(RSSI); Serial.print(")"); Serial.println("");
@@ -145,6 +172,7 @@ void ScanForReciever() {
   // clean up ram
   WiFi.scanDelete();
 }
+#endif
 
 // Check if the reciever is already paired with the sender.
 // If not, pair the reciever with sender
@@ -155,14 +183,14 @@ bool manageReciever() {
       deletePeer();
     }
 
-    #if (VERBOSE==true)
+    #ifdef VERBOSE
     Serial.print("Reciever Status: ");
     #endif
     
     // check if the peer exists
     bool exists = esp_now_is_peer_exist(reciever.peer_addr);
     if ( exists) {
-      #if (VERBOSE==true)
+      #ifdef VERBOSE
       Serial.println("Already Paired");
       #endif
       return true;
@@ -171,7 +199,7 @@ bool manageReciever() {
       esp_err_t addStatus = esp_now_add_peer(&reciever);
       if (addStatus == ESP_OK) {
         // Pair success
-        Serial.println("Pair with Reciever successful");
+        Serial.println("Reciever address added to peer list");
         return true;
       } else if (addStatus == ESP_ERR_ESPNOW_NOT_INIT) {
         // How did we get so far!!
@@ -195,7 +223,7 @@ bool manageReciever() {
       }
     }
   } else {
-    #if (VERBOSE==true)
+    #ifdef VERBOSE
     Serial.println("No Reciever found to process");
     #endif
     return false;
@@ -226,14 +254,20 @@ void sendData() {
   const uint8_t *peer_addr = reciever.peer_addr;
   esp_err_t result = esp_now_send(peer_addr, (uint8_t *) &myData, sizeof(myData));
 
-  #if (VERBOSE==true)
-  Serial.print("A2:"); Serial.print(myData.A2);
-  Serial.print(",A4:"); Serial.print(myData.A4);
-  Serial.print(",touch1:"); Serial.println(myData.touch1);
+  #ifdef VERBOSE
+  #ifdef USE_TRILL
+  Serial.print(myData.numTouches); Serial.print(" touches: ");
+  for(int i=0; i < myData.numTouches; i++) {
+    Serial.print(myData.touchLocations[i]); Serial.print(" ");
+    Serial.print(myData.touchSizes[i]); Serial.print("  ");
+  }
+  Serial.println();
+  #endif
   Serial.print("Send Status: ");
   #endif
+
   if (result == ESP_OK) {
-    #if (VERBOSE==true)
+    #ifdef VERBOSE
     Serial.println("Success");
     #endif
   } else if (result == ESP_ERR_ESPNOW_NOT_INIT) {
@@ -250,6 +284,31 @@ void sendData() {
   } else {
     Serial.println("Not sure what happened");
   }
+}
+
+// read sensor data & load into myData
+void readSensors() {
+#ifdef USE_TRILL
+  delay(50); // delay for stability
+  trillSensor.read();
+  myData.numTouches = trillSensor.getNumTouches();
+  if(myData.numTouches > 0) {
+    for(int i = 0; i < myData.numTouches; i++) {
+      myData.touchLocations[i] = trillSensor.touchLocation(i);
+      myData.touchSizes[i] = trillSensor.touchSize(i);
+    }
+    myData.touchActive = true;
+  }
+  else if(myData.touchActive) {
+    // Print a single line when touch goes off
+    myData.touchActive = false;
+  }
+#endif
+  //myData.A2 = analogRead(A2); delay(1);
+  //myData.A4 = analogRead(A4); delay(1);
+  //myData.touch1 = touchRead(T0); delay(1); // T0=4=A5
+  //myData.touch2 = touchRead(T4); // T4=13=D13
+  //myData.hall = hallRead();
 }
 
 // callback when data is sent from Sender to Reciever
@@ -273,6 +332,23 @@ void setup() {
   Serial.begin(115200);
   delay(50);
 
+  // Setup sensors...
+#ifdef USE_TRILL
+  int ret = trillSensor.setup(TRILL_DEVICE);
+  delay(50);
+  trillSensor.setMode(TRILL_MODE);
+  if(ret != 0) {
+    Serial.println("failed to initialise trillSensor");
+    Serial.print("Error code: ");
+    Serial.println(ret);
+  } else {
+    Serial.println("Trill was detected!");
+  }
+
+  printTrillInfo();
+#endif
+
+  // Setup ESPNow...
   //Set this device, the Sender, in STA mode (Wifi Station) to begin with
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(CHANNEL, WIFI_SECOND_CHAN_NONE);
@@ -289,21 +365,25 @@ void setup() {
   esp_now_register_send_cb(OnDataSent);
 
   // Register reciever as a peer
+#ifdef SCAN_FOR_PREFIX
+  ScanForReciever();
+#else
   memcpy(reciever.peer_addr, recieverAddress, 6);
   reciever.channel = CHANNEL;
   reciever.encrypt = false;
+#endif
 
   // Add reciever as peer
   while( ! manageReciever() ) {
     delay(3000);
-    Serial.print("Retry connection to reciever...");
+    Serial.println("Retry connection to reciever...");
   }
 
 
 }
 
 void loop() {
-  // ScanForReciever();
+  //ScanForReciever();
   
   if((millis() - timer) > samplingPeriod_ms) {
   // We will check if `reciever` is defined and then we proceed further
@@ -318,11 +398,8 @@ void loop() {
       // See pinout ESP32 V1: https://cdn-learn.adafruit.com/assets/assets/000/111/179/original/wireless_Adafruit_HUZZAH32_ESP32_Feather_Pinout.png
       // See pinout ESP32 V2: https://cdn-learn.adafruit.com/assets/assets/000/123/406/original/adafruit_products_Adafruit_ESP32_Feather_V2_Pinout.png
       
-      myData.A2 = analogRead(A2); delay(1);
-      myData.A4 = analogRead(A4); delay(1);
-      myData.touch1 = touchRead(T0); delay(1); // T0=4=A5
-      //myData.touch2 = touchRead(T4); // T4=13=D13
-      //myData.hall = hallRead();
+      // Read sensor data into data packet struct
+      readSensors();
 
       // Send data to device
       sendData();
@@ -337,3 +414,88 @@ void loop() {
   timer=millis();
 }
 }
+
+
+#ifdef USE_TRILL
+void printTrillInfo() {
+  int address = trillSensor.getAddress();
+
+  Serial.println("Trill Device Details: ");
+  Serial.print("\t- I2C address: ");
+  Serial.print("#");
+  Serial.print(address, HEX);
+  Serial.print(" (");
+  Serial.print(address);
+  Serial.println(")");
+
+  int deviceType = trillSensor.deviceType();
+  Serial.print("\t- Trill device type: ");
+  switch(deviceType) {
+    case Trill::TRILL_BAR:
+      Serial.println("bar");
+      break;
+    case Trill::TRILL_SQUARE:
+      Serial.println("square");
+      break;
+    case Trill::TRILL_HEX:
+      Serial.println("hex");
+      break;
+    case Trill::TRILL_RING:
+      Serial.println("ring");
+      break;
+    case Trill::TRILL_CRAFT:
+      Serial.println("craft");
+      break;
+  	case Trill::TRILL_FLEX:
+      Serial.print("flex");
+      break;
+    case Trill::TRILL_UNKNOWN:
+      Serial.println("unknown");
+      break;
+    case Trill::TRILL_NONE:
+      Serial.println("none");
+      break;
+  }
+    int firmwareRev = trillSensor.firmwareVersion();
+    Serial.print("\t- Firmware version: ");
+    Serial.println(firmwareRev);
+
+    int mode = trillSensor.getMode();
+    Serial.print("\t- Sensor mode: ");
+    switch(mode) {
+      case Trill::CENTROID:
+        Serial.println("centroid");
+        break;
+      case Trill::RAW:
+        Serial.println("raw");
+        break;
+      case Trill::BASELINE:
+        Serial.println("baseline");
+        break;
+      case Trill::DIFF:
+        Serial.println("differential");
+        break;
+      case Trill::AUTO:
+        Serial.println("auto");
+        break;
+    }
+
+    Serial.print("\t- Number of available centroid dimensions: ");
+    if(trillSensor.is1D()) {
+      Serial.println(1);
+    } else if(trillSensor.is2D()) {
+      Serial.println(2);
+    } else {
+      Serial.println(0);
+    }
+
+    int numChannels = trillSensor.getNumChannels();
+    Serial.print("\t- Number of capacitive channels: ");
+    Serial.println(numChannels);
+
+    int numButtons = trillSensor.getNumButtons();
+    Serial.print("\t- Number of button channels: ");
+    Serial.println(numButtons);
+}
+#endif
+

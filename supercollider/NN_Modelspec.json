@@ -1,0 +1,12 @@
+{
+  "root": "/home/jon/Dev/models/rave/",
+  "models": {
+		"acryvae":         { "path": "acry/r3-acry44k-bs512-8702-f99.ts", "numLatents": 32, "gate": false, "gateThresh": 0.2 },
+		"animal2":         { "path": "animal2rt/animal2rt_1M58_sc.ts", "numLatents": 4, "gate": false, "gateThresh": 0.2 },
+		"blonk2_90":       { "path": "blonk2/rave_blonk2aug_vs_lg16_2e-2_ll_f90.ts", "numLatents": 8, "gate": true, "gateThresh": 0.02 },
+		"chorala2":        { "path": "chorala2/rave3-chorala2-48k-1301k-f9.ts", "numLatents": 16, "gate": true, "gateThresh": 0.02 },
+		"jvox95":          { "path": "jvul01/rave_jvul01aug_vs_df8_1e-2_ll_95.ts", "numLatents": 32, "gate": false, "gateThresh": 0.02 },
+		"vctk1k":        { "path": "vctk/rave3-vctk1024-m1-48k-1125k-streaming-20latent.ts", "numLatents": 20, "gate": true, "gateThresh": 0.02 },
+		"nasa":            { "path": "nasa/nasa.ts", "numLatents": 4, "gate": false, "gateThresh": 0.2 },
+	}
+}
