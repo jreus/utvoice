@@ -111,7 +111,8 @@ void configDeviceAP() {
 void OnDataRecv(uint8_t *mac_addr, uint8_t *incomingData, uint8_t data_len) {
 #endif
 #ifdef ESP32
-void OnDataRecv(const esp_now_recv_info *mac_addr, const uint8_t *incomingData, int data_len) {
+//void OnDataRecv(const esp_now_recv_info *mac_addr, const uint8_t *incomingData, int data_len) {
+void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int data_len) {
 #endif
  char macStr[18];
   memcpy(&myData, incomingData, sizeof(myData));
@@ -151,7 +152,7 @@ void OnDataRecv(const esp_now_recv_info *mac_addr, const uint8_t *incomingData, 
 void setup() {
 
   Serial.begin(BAUD);
-  delay(10);
+  delay(1000);
   Serial.println();
   Serial.println("ESPNow Reciever");
 

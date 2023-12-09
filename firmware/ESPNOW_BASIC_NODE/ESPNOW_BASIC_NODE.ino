@@ -1,16 +1,17 @@
 /**
-   ESPNOW - Basic communication - PRIMARY ESP32 (data sender)
+   ESPNOW - Basic communication system
+   NODE (sends sensor data to reciever, accepts actuator signals from reciever)
 
   See: https://randomnerdtutorials.com/esp-now-esp32-arduino-ide/
 
-   << This Device is Sender >>
+   << This Device is a NODE >>
 
-   Codeflow: Sender (Primary)
-   Step 1 : ESPNow Init on Sender and set it in STA mode
+   Codeflow: NODE (Primary)
+   Step 1 : ESPNow Init on NODE and set it in STA mode
    Step 2 : Start scanning for Receiver ESP32 (we have added a prefix of `rcv` to the SSID of the receiver for an easy setup)
    Step 3 : Once found, add the Reciever as a peer
    Step 4 : Register for send callback
-   Step 5 : Start Transmitting data from Sender to Reciever
+   Step 5 : Start Transmitting data from NODE to Reciever
 
    Codeflow: Reciever (Secondary)
    Step 1 : ESPNow Init on Receiver
