@@ -52,6 +52,7 @@ void setup() {
     craftOK=false;
   } else {
     Serial.println("Initialising trill craft");
+    // TODO: Probably also a good idea to set prescaler & update baseline based on craft setup
     craftOK=true;
     delay(200);
     trillCraft.setMode(trillMode);
