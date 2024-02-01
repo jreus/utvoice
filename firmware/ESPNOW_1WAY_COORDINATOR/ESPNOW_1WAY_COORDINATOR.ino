@@ -12,8 +12,8 @@
   https://github.com/jreus
 */
 
-//#define ENABLE_SENSOR_NODE
-#define ENABLE_ACTUATOR_NODE
+#define ENABLE_SENSOR_NODE
+//#define ENABLE_ACTUATOR_NODE
 #define COORDINATOR_AP_MODE // uncomment to run coordinator in AP-mode / broadcasting a network ssid
 #define ESPNOW_CHANNEL 11 // ESPNow channel, must match nodes firmware
 

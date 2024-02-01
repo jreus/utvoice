@@ -10,7 +10,7 @@ See: https://github.com/BelaPlatform/Trill-Arduino
 
 #include <Trill.h>
 
-//#define CENTROID_MODE // Uncomment to read touch point data instead of raw differential data
+#define CENTROID_MODE // Uncomment to read touch point data instead of raw differential data
 //#define USE_CRAFT // Uncomment if you have a Trill Craft connected
 #define USE_FLEX  // Uncomment if you have a Trill Flex connected
 

@@ -8,3 +8,11 @@ The respository includes:
 * `firmware`        ESP32 firmware for different purposes: coordinator, sensor node, actuator node, specific hardware, sensor & actuator tests etc..
 * `supercollider`   Sound synthesis examples written in SuperCollider
 
+
+## Python Dependencies
+
+pyserial    https://pyserial.readthedocs.io/en/latest/pyserial.html
+
+python-osc  https://pypi.org/project/python-osc/
+
+
