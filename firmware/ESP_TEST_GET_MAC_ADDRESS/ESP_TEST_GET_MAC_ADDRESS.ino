@@ -9,16 +9,20 @@ Angelika's Feather ESP32 v1 dev boards.
 A: 30:AE:A4:20:94:28
 B: 30:AE:A4:23:74:AC
 
-Jon's Feather ESP32 v2 boards.
+Jon's Feather ESP32 v2 boards
 a) E8:9F:6D:2F:64:10
-b) E8:9F:6D:2F:48:54
+b) E8:9F:6D:2F:48:53
 c) E8:9F:6D:32:FF:50
 d) 0C:8B:95:95:81:D0
+
+Jon's Feather ESP32 S2 boards
+h) 70:04:1D:FC:4D:58
+i) 70:04:1D:FC:4D:42
+
 
 Jon's ESP8266 boards.
 q) 5C:CF:7F:EF:BB:08
 r) 5C:CF:7F:EF:BD:81
-
 
 */
 
@@ -32,6 +36,8 @@ r) 5C:CF:7F:EF:BD:81
 
 void setup(){
   Serial.begin(115200);
+  delay(1000);
+  Serial.println("ESP Board Begin...");
   Serial.println();
   Serial.println();
 #ifdef ESP32
@@ -40,6 +46,9 @@ void setup(){
   Serial.println(WiFi.macAddress());
 }
  
-void loop(){
+void loop() {
+  delay(1000);
+  Serial.println("ESP Board Loop.");
+  Serial.println(WiFi.macAddress());
 
 }

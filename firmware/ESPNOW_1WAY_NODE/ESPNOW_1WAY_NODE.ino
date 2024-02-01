@@ -1,7 +1,7 @@
 /**
    ESPNOW - GENERAL FIRMWARE FOR A 1WAY SENSOR/ACTUATOR NODE
    This firmware sketch is meant as a starting point for creating custom sensor or actuator nodes.
-   Depending on configuration of preprocessor flags:
+   Depending on configuration of preproce ssor flags:
     * this firmware sends sensor data to a coordinator (NODE_MODE=0) 
     * or recieves actuator signals from a coordinator (NODE_MODE=1)
 
@@ -11,23 +11,50 @@
   https://github.com/jreus
 */
 
-#define NODE_MODE 0 // 0 == SENSOR (SENDER) NODE
-//#define NODE_MODE 1 // 1 == ACTUATOR (RECIEVER) NODE
-//#define COORDINATOR_AP // uncomment if coordinator is running in AP-mode and broadcasting a network ssid
+//#define NODE_MODE 0 // 0 == SENSOR (SENDER) NODE
+#define NODE_MODE 1 // 1 == ACTUATOR (RECIEVER) NODE
+#define COORDINATOR_AP_MODE // uncomment if coordinator is running in AP-mode and broadcasting a network ssid
+// Configure ESPNOW
+#define ESPNOW_CHANNEL 11          // pick a channel (good to choose one not being used by ambient wifi)
+#define ESPNOW_ENCRYPTION 0       // no encryption
+#define PRINTSCANRESULTS 0
+#define DELETEBEFOREPAIR 0
 
-// Enable sensors
+// Enable sensors - flags must match coordinator
 //#define USE_ADXL313 // using an ADXL313 3-axis accelerometer
+//#define USE_TRILL       // uncomment if using a Trill sensor
+//#define TRILL_DEVICE_TYPE 1  // 0 for CRAFT, 1 for FLEX
+//#define TRILL_SENSOR_MODE 1    // 0 for DIFF, 1 for CENTROID
 
-// Enable actuators
+// Enable actuators - flags must match coordinator
 //#define USE_SERVO180 // use a standard servo/linear servo with operational values in degrees from 0-180
+#define USE_NEOPIXEL_STRIP // use a strip of neopixels
+
+#if defined(USE_NEOPIXEL_STRIP)
+#include <Adafruit_NeoPixel.h>
+// On ESP32 pins 6-11 are connected to SPI flash.
+const uint8_t neopixel_dpin = 12; // use a pix appropriate to your ESP board
+const uint8_t neopixel_led_count = 17; // how many neopixels are in the strip?
+Adafruit_NeoPixel strip(neopixel_led_count, neopixel_dpin, NEO_GRB + NEO_KHZ800);
+// Argument 3 = Pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+#endif
+
+
 
 // Set coordinator SSID prefix, or coordinator MAC address
-#if defined(COORDINATOR_AP)
+#if defined(COORDINATOR_AP_MODE)
 const char* coordinator_ap_ssid_prefix = "rcv_"; // Set this to your AP coordinator's SSID prefix
 #else
 // Coordinator is STA mode. Set this to your coordinator's MAC address so that this node will be able to find it.
-uint8_t coordinator_sta_mac[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x64, 0x10}; // a
-//uint8_t coordinator_sta_mac[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x48, 0x55}; // b
+//uint8_t coordinator_sta_mac[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x64, 0x10}; // ESP32 v2 a
+//uint8_t coordinator_sta_mac[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x48, 0x54}; // ESP32 v2 b
+uint8_t coordinator_sta_mac[] = {0xE8, 0x9F, 0x6D, 0x32, 0xFF, 0x50}; // ESP32 v2 c
+//uint8_t coordinator_sta_mac[] = {0x5C, 0xCF, 0x7F, 0xEF, 0xBD, 0x81}; // ESP8266 r
 #endif
 
 #if defined(ESP32)
@@ -45,11 +72,6 @@ uint8_t coordinator_sta_mac[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x64, 0x10}; // a
 ADXL313 accel3x;
 #endif
 
-
-// ENABLE & CONFIGURE TRILL SENSOR
-#define USE_TRILL       // uncomment if using a Trill sensor
-#define TRILL_DEVICE_TYPE 1  // 0 for CRAFT, 1 for FLEX
-#define TRILL_SENSOR_MODE 1    // 0 for DIFF, 1 for CENTROID
 
 #if defined(USE_TRILL)
 #include <Trill.h>
@@ -69,9 +91,11 @@ const Trill::Mode trillMode = Trill::CENTROID;
 #endif
 
 
-// Data package, must match data package format in Reciever firmware
+#if NODE_MODE == 0
+// NODE_MODE == 0 - REMOTE SENSOR NODE
+// Sensor Output Data package, must match data package format in Reciever firmware
 // ESPNow spec limits this to around 250 bytes
-typedef struct outgoing_data_package {
+typedef struct sensor_data_package {
 #if defined(USE_TRILL)
   #if TRILL_SENSOR_MODE == 0
   // Trill DIFF parameters
@@ -91,16 +115,28 @@ typedef struct outgoing_data_package {
   int az = 0;
 #endif
   char msg[8];
-} outgoing_data_package;
-outgoing_data_package dataOUT;
+} sensor_data_package;
+sensor_package dataOUT;
 
-// Configure ESPNOW
-#define ESPNOW_CHANNEL 1          // pick a channel (good to choose one not being used by ambient wifi)
-#define ESPNOW_ENCRYPTION 0       // no encryption
-#define PRINTSCANRESULTS 0
-#define DELETEBEFOREPAIR 0
+#else
+
+// NODE_MODE == 1 - REMOTE ACTUATOR CONTROL
+// Actuator Input Data package, must match data package format in Coordinator firmware
+// ESPNow spec limits this to around 250 bytes
+typedef struct actuator_data_package {
+  #if defined(USE_NEOPIXEL_STRIP)
+  uint8_t light_position = 0; // simplified control, set a led strip position from 0-255
+  //uint32_t led_colors[neopixel_led_count]; // careful, this can fill up the max 250 byte data package very quickly!
+  #endif
+  char msg[8];
+} actuator_data_package;
+actuator_data_package dataIN;
+
+#endif
+
+
+
 esp_now_peer_info_t coordinator;
-
 //timer for transmission rate
 unsigned long timer = 0;
 const int samplingPeriod_ms = 15;   // desired transmission period in milliseconds
@@ -125,7 +161,7 @@ void InitESPNow() {
 }
 
 
-#if defined(COORDINATOR_AP)
+#if defined(COORDINATOR_AP_MODE)
 
 // Scan for coordinator AP network with SSID including coordinator_ap_ssid_prefix
 void ScanForCoordinator() {
@@ -194,12 +230,14 @@ bool manageCoordinator() {
   if (coordinator.channel == ESPNOW_CHANNEL) {
     if (DELETEBEFOREPAIR) deleteCoordinator();
 
-    if(verbose) Serial.print("Reciever Status: ");
     
     // check if the coordinator is registered as a peer
     bool exists = esp_now_is_peer_exist(coordinator.peer_addr);
     if ( exists) {
-      if(verbose) Serial.println("Already Paired");
+      if(verbose) {
+        Serial.print("Coordinator Status: ");
+        Serial.println("Already Paired");
+      }
       return true;
     } else {
       // attempt pairing with coordinator
@@ -253,6 +291,57 @@ void deleteCoordinator() {
   }
 }
 
+
+
+#if NODE_MODE == 0
+// OUTGOING SENSOR DATA FUNCTIONS...
+
+// read sensors & load readings into dataOUT
+void readSensors() {
+  delay(50); // delay for stability
+  
+  #if defined(USE_TRILL)
+  
+  #if TRILL_SENSOR_MODE == 0
+  if(trillOK) {
+    trillSensor.requestRawData();
+    if(trillSensor.rawDataAvailable() > 0) {
+      readRawTrillData(trillSensor);
+    }
+  }
+  #else
+  // Read TOUCH/CENTROID data
+  trillSensor.read();
+  dataOUT.numTouches = trillSensor.getNumTouches();
+  if(dataOUT.numTouches > 0) {
+    for(uint8_t i = 0; i < dataOUT.numTouches; i++) {
+      dataOUT.touchLocations[i] = trillSensor.touchLocation(i);
+      dataOUT.touchSizes[i] = trillSensor.touchSize(i);
+    }
+    dataOUT.touchActive = true;
+  }
+  else if(dataOUT.touchActive) {
+    // One reading with no touches, set touchActive to 0
+    dataOUT.touchActive = false;
+  }
+  #endif
+
+  #endif
+
+  #if defined(USE_ADXL313)
+  if(accel3x.dataReady()) // check data ready interrupt, note, this clears all other int bits in INT_SOURCE reg
+  {
+    accel3x.readAccel(); // read all 3 axis, they are stored in class variables: myAdxl.x, myAdxl.y and myAdxl.z
+    dataOUT.ax = accel3x.x;
+    dataOUT.ay = accel3x.y;
+    dataOUT.az = accel3x.z;
+  }
+  #endif
+
+  // Set sensor read info message, can be 7 characters max
+  dataOUT.msg = "ALLGOOD";
+  
+}
 
 uint8_t data = 0;
 // send data to coordinator
@@ -316,53 +405,6 @@ void sendData() {
   }
 }
 
-// read sensors & load readings into dataOUT
-void readSensors() {
-  delay(50); // delay for stability
-  
-  #if defined(USE_TRILL)
-  
-  #if TRILL_SENSOR_MODE == 0
-  if(trillOK) {
-    trillSensor.requestRawData();
-    if(trillSensor.rawDataAvailable() > 0) {
-      readRawTrillData(trillSensor);
-    }
-  }
-  #else
-  // Read TOUCH/CENTROID data
-  trillSensor.read();
-  dataOUT.numTouches = trillSensor.getNumTouches();
-  if(dataOUT.numTouches > 0) {
-    for(uint8_t i = 0; i < dataOUT.numTouches; i++) {
-      dataOUT.touchLocations[i] = trillSensor.touchLocation(i);
-      dataOUT.touchSizes[i] = trillSensor.touchSize(i);
-    }
-    dataOUT.touchActive = true;
-  }
-  else if(dataOUT.touchActive) {
-    // One reading with no touches, set touchActive to 0
-    dataOUT.touchActive = false;
-  }
-  #endif
-
-  #endif
-
-  #if defined(USE_ADXL313)
-  if(accel3x.dataReady()) // check data ready interrupt, note, this clears all other int bits in INT_SOURCE reg
-  {
-    accel3x.readAccel(); // read all 3 axis, they are stored in class variables: myAdxl.x, myAdxl.y and myAdxl.z
-    dataOUT.ax = accel3x.x;
-    dataOUT.ay = accel3x.y;
-    dataOUT.az = accel3x.z;
-  }
-  #endif
-
-  // Set sensor read info message, can be 7 characters max
-  dataOUT.msg = "ALLGOOD";
-  
-
-}
 
 // callback when data is sent to coordinator
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -378,14 +420,50 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 
+#else
+// INCOMING ACTUATOR DATA FUNCTIONS...
+
+//callback when data is recieved from coordinator
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  Serial.print("Data Recieved: ");
+  Serial.println(len);
+
+
+  memcpy(&dataIN, incomingData, sizeof(dataIN));
+
+  /*
+  uint8_t light_position = 0; // simplified control, set a led strip position from 0-255
+  //uint32_t led_colors[neopixel_led_count]; // careful, this can fill up the max 250 byte data package very quickly!
+  #endif
+  char msg[8];
+  */
+
+  #if defined(USE_NEOPIXEL_STRIP)
+  Serial.print("lp:");
+  Serial.print(dataIN.light_position);
+  #endif
+
+  Serial.print(",msg:");
+  Serial.print(dataIN.msg);  
+  Serial.println();
+
+}
+
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////
 
 void setup() {
   Serial.begin(115200);
-  delay(50);
+  delay(1500);
+  Serial.println("BEGIN ESPNOW 1WAY NODE");
 
-  // Setup sensors...
+#if NODE_MODE == 0
+//====== SETUP SENSORS=======
+  Serial.println("RUNNING AS SENSOR NODE / SENDER");
+  Serial.print("dataOUT has length "); Serial.println(sizeof(dataOUT));
+
   #if defined(USE_TRILL)
   
   int ret = trillSensor.setup(trillDevice);
@@ -404,7 +482,6 @@ void setup() {
 
   #endif
 
-
   #if defined(USE_ADXL313)
   
   #if !defined(USE_TRILL)
@@ -421,8 +498,22 @@ void setup() {
 
   #endif
 
+#else
+//====== SETUP ACTUATORS ========
+  Serial.println("RUNNING AS ACTUATOR NODE / RECIEVER");
+  Serial.print("dataIN has length "); Serial.println(sizeof(dataIN));
 
-  // Setup ESPNow...
+  #if defined(USE_NEOPIXEL_STRIP)
+  // strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
+  // strip.show();            // Turn OFF all pixels ASAP
+  // strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
+  #endif
+
+
+#endif
+
+
+  // Setup ESPNOW...
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
   Serial.println("Configuring ESPNow Node");
@@ -433,17 +524,24 @@ void setup() {
   Serial.println("Initializing ESPNow");
   InitESPNow();
 
+#if NODE_MODE == 0
   // Once ESPNow is successfully Init, we will register for Send CB to
   // get the status of Trasnmitted packet
+  Serial.println("Register OnDataSent Callback");
   esp_now_register_send_cb(OnDataSent);
+#else
+  // Register recieve callback
+  Serial.println("Register OnDataRecv Callback");
+  esp_now_register_recv_cb(OnDataRecv);
+#endif
 
   // Register reciever as a peer
-  #ifdef COORDINATOR_AP
+  #if defined(COORDINATOR_AP_MODE)
   ScanForCoordinator();
   #else
-  memcpy(coordinator.peer_addr, coordinator_mac, 6);
-  reciever.channel = ESPNOW_CHANNEL;
-  reciever.encrypt = ESPNOW_ENCRYPTION;
+  memcpy(coordinator.peer_addr, coordinator_sta_mac, 6);
+  coordinator.channel = ESPNOW_CHANNEL;
+  coordinator.encrypt = ESPNOW_ENCRYPTION;
   #endif
 
   // Register coordinator as peer
@@ -455,7 +553,10 @@ void setup() {
 }
 
 void loop() {
-  
+
+#if NODE_MODE == 0
+//SENSOR SAMPLING
+
   if((millis() - timer) > samplingPeriod_ms) { // transfer rate timer
     if (coordinator.channel == ESPNOW_CHANNEL) { // check if reciever channel is defined
       // Add coordinator as a peer if it has not been added already
@@ -473,10 +574,16 @@ void loop() {
     timer=millis();
   }
 
+#else
+// ACTUATOR CONTROL
+  bool isPaired = manageCoordinator();
+  delay(1000);
+#endif
+
 }
 
 
-#if defined(USE_TRILL)
+#if NODE_MODE == 0 && defined(USE_TRILL)
 
 /////// TRILL HELPER FUNCTIONS ///////
 void printTrillInfo() {
