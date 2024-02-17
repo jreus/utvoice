@@ -32,13 +32,14 @@ Mapping for FX Synth:
 
 ----------------------------------------------------------*/
 
-
+s.options.memSize = 2 ** 16;
 s.boot;
 s.meter;
 
 ( // Basic Incoming OSC test.. just print whatever Python is sending us.
 OSCdef(\esp32, {|msg| msg.postln }, "/esp32");
 );
+OSCdef(\esp32).clear;
 
 ( // Basic Audio Test. Some Sine waves on audio output channels [0,1]
 Ndef(\audiotest, {
@@ -47,14 +48,12 @@ Ndef(\audiotest, {
 );
 Ndef(\audiotest).clear; // destroy the synth
 
-
 (
 
 // OSC input mapping for Notey Patch
 OSCdef(\esp32, {|msg|
 	var gains = Array.newClear(13);
-	msg = msg[2..];
-	msg.join(":").postln;
+	msg = msg[2..15];
 
 	// Map all 13 sensor values to gain levels for each "note"
 	13.do {|idx|
@@ -63,7 +62,8 @@ OSCdef(\esp32, {|msg|
 		Ndef(\synthpatch).set(param, gains[idx]);
 		//"% %".format(param, gains[idx]).postln;
 	};
-	gains.postln;
+	//msg.join(":").postln;
+	//gains.postln;
 }, "/esp32");
 
 
@@ -71,12 +71,15 @@ OSCdef(\esp32, {|msg|
 
 
 
-( // Notey Vocoder Synth
-Ndef(\synthpatch, {|pregain=10.0, gain=1.0|
-	//var pitches = ([1,2,3,4,5,6,7,8,9,11,12,13] + 36).midicps; // definitely play with the pitch distribution to see what's possible
-	var pitches = (Scale.major.ratios ++ (Scale.major.ratios[..5] * 2)) * 220; // simple major scale over 13 notes, starting at A3 (220hz)
+
+
+
+( // Notey Vocoder-like Synth
+Ndef(\synthpatch, {|pregain=1.0, gain=1.0|
+	var pitchratios = ((Scale.major.ratios / 2) ++ Scale.major.ratios)[..12]; // experiment with other distributions of pitch ratios
+	//var pitches = (Array.series(13, 1, 3) + 36).midicps;
 	var voicein = SoundIn.ar(0);
-	var sig, carriers;
+	var sig, shifted, voxmix;
 	var volumes = [
 		\v1.kr(0.0, 0.1),
 		\v2.kr(0.0, 0.1),
@@ -91,14 +94,14 @@ Ndef(\synthpatch, {|pregain=10.0, gain=1.0|
 		\v11.kr(0.0, 0.1),
 		\v12.kr(0.0, 0.1),
 		\v13.kr(0.0, 0.1),
-		0,0,0,0,0,0,0,
 	];
 
-	carriers = Saw.ar(pitches) * volumes;
-	sig = Vocoder.ar(carriers, voicein, 20, 200, 5000, 0.02, 5000, 0.05, 25) * pregain;
+	shifted = PitchShift.ar(LPF.ar(voicein, 4000), 0.2, pitchRatio: pitchratios, pitchDispersion: 0.01, timeDispersion: 0.01);
+	shifted = shifted * volumes;
 
-	//sig = Splay.ar(sig); // spread voices across the stereo field
-	sig = Pan2.ar(sig.sum, 0.0); // mix down to mono and pan how you like
+	//sig = Splay.ar(shifted); // spread voices across the stereo field
+	//sig = Pan2.ar(Mix(shifted), 0.0); // mix down to mono and pan how you like
+	sig = GVerb.ar(Mix(shifted), 50, 2, 0.5, 0.5, 5, 1, 0.5, 0.3); // run into a stereo reverb
 	sig = sig * gain;
 	Limiter.ar(sig);
 
@@ -128,8 +131,8 @@ Ndef(\synthpatch, {|pregain=10.0, gain=1.0|
 		\v13.kr(0.0, 0.1),
 		0,0,0,0,0,0,0,0,
 	];
-	sig = SinOsc.ar(pitches) * volumes;
-	sig = Pan2.ar(sig.sum, 0.0);
+	sig = SinOsc.ar(pitches) * 0.3 * volumes;
+	sig = Pan2.ar(sig.sum.softclip, 0.0);
 	Limiter.ar(sig * gain);
 }).play;
 
@@ -146,10 +149,10 @@ Ndef(\synthpatch, {|pregain=10.0, gain=1.0|
 OSCdef(\esp32, {|msg|
 	var modevals = [msg[2], msg[3], msg[4]];
 	var modestate = -1;
-	var intensityslider = msg[4..];
+	var intensityslider = msg[4..15];
 	var intensity = intensityslider.maxIndex; // will be an intensity value from 0-9
 
-	"INTENSITY: %   MODE: %".format(intensity, modestate).postln;
+	"INTENSITY: %   MODE: %  CURRENT_MODE: %".format(intensity, modestate, ~current_mode).postln;
 
 
 	if(modevals.sum < 40) {
@@ -166,7 +169,7 @@ OSCdef(\esp32, {|msg|
 		switch(~current_mode, // Set intensity parameter based on current mode
 			0, { // Reverb
 				// maybe try other params like \revtime or \revmix ... just make sure to map the intensity to sensible values
-				var revsize = intensity.linlin(0, 9, 0.5, 100.0);
+				var revsize = intensity.linlin(0, 9, 1, 50.0);
 				Ndef(\synthpatch).set(\revsize, revsize);
 			},
 			1, { // Distortion
@@ -174,8 +177,8 @@ OSCdef(\esp32, {|msg|
 				Ndef(\synthpatch).set(\predist, predist);
 			},
 			2, { // Delay
-				var deltime = intensity.linlin(0, 9, 0.1, 1.0);
-				var deldecay = intensity.linexp(0, 9, 0.2, 1.5);
+				var deltime = intensity.linlin(0, 9, 0.1, 2.0);
+				var deldecay = intensity.linexp(0, 9, -10.0, 10.0);
 				Ndef(\synthpatch).set(\deltime, deltime, \deldecay, deldecay); // Let's try manipulating two parameters at once!
 			},
 			{ "Unknown mode value!".error }
@@ -198,7 +201,7 @@ Ndef(\synthpatch, {|gain=1.0| // This is an FX patch! We call it Notey to make s
 	var voicein = SoundIn.ar(0);
 
 	distsig = (voicein * \predist.kr(10.0, 0.1)).softclip;
-	delsig = CombC.ar(voicein, 1.0, \deltime.kr(0.4, 0.1), \deldecay.kr(0.5, 0.1));
+	delsig = CombC.ar(voicein, 3.0, \deltime.kr(0.4, 0.1), \deldecay.kr(0.5, 0.1));
 
 	mix = [voicein * \voicemix.kr(1.0, 0.1), distsig * \distmix.kr(1.0, 0.1), delsig * \delmix.kr(1.0, 0.1)].sum;
 	revsig = GVerb.ar(mix, roomsize: \revsize.kr(10, 0.1), revtime: \revtime.kr(3.0, 0.1), damping: 0.5);

@@ -8,7 +8,6 @@
 */
 
 
-
 // REPLACE WITH YOUR COORDINATOR MAC ADDRESS 
 //uint8_t coordinator_mac[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x64, 0x10}; // ESP32 v2 a
 //uint8_t coordinator_mac[] = {0xE8, 0x9F, 0x6D, 0x2F, 0x48, 0x54}; // ESP32 v2 b
@@ -17,7 +16,7 @@ uint8_t coordinator_mac[] = {0xE8, 0x9F, 0x6D, 0x32, 0xFF, 0x50}; // ESP32 v2 c
 
 #define USE_TRILL       // uncomment if using a Trill sensor
 #define TRILL_DEVICE_TYPE 1  // 0 for CRAFT, 1 for FLEX
-#define TRILL_SENSOR_MODE 1    // 0 for DIFF, 1 for CENTROID
+#define TRILL_SENSOR_MODE 0    // 0 for DIFF, 1 for CENTROID
 //#define USE_ADXL313 // using an ADXL313 3-axis accelerometer
 
 #define ESPNOW_CHANNEL 11          // pick a channel (good to choose one not being used by ambient wifi)
@@ -25,11 +24,18 @@ uint8_t coordinator_mac[] = {0xE8, 0x9F, 0x6D, 0x32, 0xFF, 0x50}; // ESP32 v2 c
 #define PRINTSCANRESULTS 0
 #define DELETEBEFOREPAIR 0
 
-
+const bool verbose = false;         // verbose serial output
+const bool print_data = false;         // print sensor data over serial
+const int samplingPeriod_ms = 20;   // desired transmission period in milliseconds
+//const int samplingPeriod_ms = 2000;   // desired transmission period in milliseconds
 
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h> // only for esp_wifi_set_channel()
+
+esp_now_peer_info_t coordinator;
+//timer for transmission rate
+unsigned long timer = 0;
 
 #if defined(USE_ADXL313)
 #include <Wire.h>
@@ -54,12 +60,6 @@ const Trill::Mode trillMode = Trill::CENTROID;
 #endif
 #endif
 
-esp_now_peer_info_t coordinator;
-//timer for transmission rate
-unsigned long timer = 0;
-//const int samplingPeriod_ms = 15;   // desired transmission period in milliseconds
-const int samplingPeriod_ms = 2000;   // desired transmission period in milliseconds
-const bool verbose = true;         // verbose serial output
 
 
 
@@ -184,6 +184,8 @@ void sendData() {
   const uint8_t *peer_addr = coordinator.peer_addr;
   esp_err_t result = esp_now_send(peer_addr, (uint8_t *) &dataOUT, sizeof(dataOUT));
 
+  if(print_data) {
+
   #if defined(USE_TRILL)
 
   #if TRILL_SENSOR_MODE == 0
@@ -220,10 +222,13 @@ void sendData() {
   Serial.println();
   #endif
 
+  }
+
+  if(verbose) {
   Serial.print("Send result: ");
 
   if (result == ESP_OK) {
-    if(verbose) Serial.println("Success");
+    Serial.println("Success");
   } else if (result == ESP_ERR_ESPNOW_NOT_INIT) {
     // How did we get so far!!
     Serial.println("ESPNOW not Init.");
@@ -237,6 +242,8 @@ void sendData() {
     Serial.println("Peer not found.");
   } else {
     Serial.println("Not sure what happened");
+  }
+
   }
 }
 

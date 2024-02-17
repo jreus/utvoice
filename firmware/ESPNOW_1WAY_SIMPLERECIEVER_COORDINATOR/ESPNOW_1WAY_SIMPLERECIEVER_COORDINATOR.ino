@@ -10,7 +10,7 @@
 
 #define USE_TRILL       // uncomment if using a Trill sensor
 #define TRILL_DEVICE_TYPE 1  // 0 for CRAFT, 1 for FLEX
-#define TRILL_SENSOR_MODE 1    // 0 for DIFF, 1 for CENTROID
+#define TRILL_SENSOR_MODE 0    // 0 for DIFF, 1 for CENTROID
 //#define USE_ADXL313 // using an ADXL313 3-axis accelerometer
 
 #define ESPNOW_CHANNEL 11          // pick a channel (good to choose one not being used by ambient wifi)

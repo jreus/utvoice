@@ -100,7 +100,7 @@ def proc_osc_server(pipe_to_main: multiprocessing.Pipe, msg_queue: multiprocessi
     print("Exiting OSC Server Process")
 
 
-def write_read_serial(hardware: serial.Serial, osc_msg_queue: multiprocessing.Queue) -> dict[str,int]:
+def write_read_serial(hardware: serial.Serial, osc_msg_queue: multiprocessing.Queue, verbose: bool) -> dict[str,int]:
     """
     Write whatever is in the send queue to the reciever.
     Read whatever is coming from the reciever & send to local software via OSC.
@@ -141,14 +141,15 @@ def write_read_serial(hardware: serial.Serial, osc_msg_queue: multiprocessing.Qu
         else:
             res=None
             if raw_recieved_data != b'\r\n':
-                print(f": {raw_recieved_data}")
+                if verbose:
+                    print(f": {raw_recieved_data}")
             else:
                 print(":")
   
     return res
 
 
-def run_main_loop(osc_client, serial_conn: serial.Serial, osc_msg_queue: multiprocessing.Queue) -> None:
+def run_main_loop(osc_client, serial_conn: serial.Serial, osc_msg_queue: multiprocessing.Queue, verbose: bool) -> None:
     """
     Main application loop. 
     
@@ -156,7 +157,7 @@ def run_main_loop(osc_client, serial_conn: serial.Serial, osc_msg_queue: multipr
     print("Begin serial read loop")
     while True:
         time.sleep(0.005) # serial read rate...
-        datablock=write_read_serial(hardware=serial_conn, osc_msg_queue=osc_msg_queue)
+        datablock=write_read_serial(hardware=serial_conn, osc_msg_queue=osc_msg_queue, verbose=verbose)
 
         if datablock is not None:
             builder = osc_message_builder.OscMessageBuilder(address="/esp32")
@@ -165,7 +166,8 @@ def run_main_loop(osc_client, serial_conn: serial.Serial, osc_msg_queue: multipr
             msg = builder.build()
             #Send out to OSC client
             osc_client.send(msg)
-            print(f"{datablock}")
+            if verbose:
+                print(f"{datablock}")
 
 
 
@@ -177,6 +179,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Utility to convert incoming serial data from an ESP32 reciever to OSC.')
 
     parser.add_argument('--list_ports', action='store_true', default=False, help='List all available serial ports.')
+    parser.add_argument('--verbose', action='store_true', default=False, help='Print incoming sensor data as it arrives.')
 
     parser.add_argument('--serial_port', type=str, help='Choose serial port the ESPNow coordinator is connected to, by default uses the first port found with --list_serial')
     parser.add_argument('--serial_baud', type=int, default=115200, help='Choose serial port baud rate, must match baud rate in the coordinator firmware. Uses 115200 by default.')
@@ -195,6 +198,7 @@ if __name__=="__main__":
         print("Available Serial Ports")
         print(serial_ports())
     else:
+        VERBOSE_PRINT = args.verbose
         OSC_DESTINATION_IP, OSC_DESTINATION_PORT = args.osc_addr.split(':')
         OSC_DESTINATION_PORT = int(OSC_DESTINATION_PORT)
         OSC_SERVER_IP, OSC_SERVER_PORT = args.osc_server_addr.split(':')
@@ -222,7 +226,7 @@ if __name__=="__main__":
         
 
         try:
-            run_main_loop(osc_client=osc_client, serial_conn=hardware, osc_msg_queue=msg_queue)
+            run_main_loop(osc_client=osc_client, serial_conn=hardware, osc_msg_queue=msg_queue, verbose=VERBOSE_PRINT)
         except:
             # Stop main loop & osc_proc
             osc_proc.join()
